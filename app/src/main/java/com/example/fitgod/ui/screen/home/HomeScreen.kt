@@ -17,7 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.fitgod.data.remote.model.IstilahDto
 import com.example.fitgod.ui.screen.detail.DetailIstilahScreen
 import com.example.fitgod.ui.screen.form.AddIstilahScreen
-import com.example.fitgod.ui.screen.form.IstilahFormScreen
+import com.example.fitgod.ui.screen.form.EditIstilahScreen
 import com.example.fitgod.util.UiState
 import com.example.fitgod.viewmodel.AuthViewModel
 import com.example.fitgod.viewmodel.IstilahViewModel
@@ -32,16 +32,14 @@ fun HomeScreen(
     val istilahList by istilahViewModel.istilahList.collectAsStateWithLifecycle()
     val operationState by istilahViewModel.operationState.collectAsStateWithLifecycle()
 
-    // EDIT dialog
-    var showFormDialog by remember { mutableStateOf(false) }
+    // state untuk page tambah & edit
+    var isAddingPage by remember { mutableStateOf(false) }
+    var isEditingPage by remember { mutableStateOf(false) }
     var editingIstilah by remember { mutableStateOf<IstilahDto?>(null) }
 
-    // DETAIL popup
+    // state untuk detail popup
     var showDetailDialog by remember { mutableStateOf(false) }
     var selectedIstilah by remember { mutableStateOf<IstilahDto?>(null) }
-
-    // PAGE tambah istilah
-    var isAddingPage by remember { mutableStateOf(false) }
 
     var searchText by rememberSaveable { mutableStateOf("") }
 
@@ -67,12 +65,12 @@ fun HomeScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = if (isAddingPage)
-                            "Tambah Istilah"
-                        else
-                            "FitGod - Kamus Istilah Gym"
-                    )
+                    val titleText = when {
+                        isAddingPage -> "Tambah Istilah"
+                        isEditingPage -> "Edit Istilah"
+                        else -> "FitGod - Kamus Istilah Gym"
+                    }
+                    Text(text = titleText)
                 },
                 actions = {
                     TextButton(onClick = {
@@ -85,11 +83,12 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            if (!isAddingPage) {
+            // FAB hanya muncul di halaman list
+            if (!isAddingPage && !isEditingPage) {
                 FloatingActionButton(
                     onClick = {
                         editingIstilah = null
-                        isAddingPage = true   // buka halaman tambah
+                        isAddingPage = true
                     }
                 ) {
                     Icon(
@@ -101,80 +100,112 @@ fun HomeScreen(
         }
     ) { innerPadding ->
 
-        if (isAddingPage) {
-            // ================== HALAMAN TAMBAH ==================
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                AddIstilahScreen(
-                    onSave = { nama, kategori, deskripsi ->
-                        // DI SINI PAKAI PARAMETER NAMA, BUKAN namaIstilah
-                        istilahViewModel.addIstilah(
-                            nama,
-                            kategori,
-                            deskripsi
-                        )
-                        isAddingPage = false
-                    },
-                    onCancel = {
-                        isAddingPage = false
-                    }
-                )
-            }
-        } else {
-            // ================== HALAMAN LIST ==================
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp)
-            ) {
-                TextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(text = "Cari istilah gym") },
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val errorMessage = (operationState as? UiState.Error)?.message
-                if (errorMessage != null) {
-                    Text(
-                        text = errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (filteredIstilah.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Belum ada istilah. Tambahkan dengan tombol +",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(filteredIstilah) { item ->
-                            IstilahItem(
-                                item = item,
-                                onClick = {
-                                    selectedIstilah = item
-                                    showDetailDialog = true
-                                }
+        when {
+            // ================= PAGE TAMBAH =================
+            isAddingPage -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    AddIstilahScreen(
+                        onSave = { nama, kategori, deskripsi ->
+                            istilahViewModel.addIstilah(
+                                nama,
+                                kategori,
+                                deskripsi
                             )
+                            isAddingPage = false
+                        },
+                        onCancel = {
+                            isAddingPage = false
+                        }
+                    )
+                }
+            }
+
+            // ================= PAGE EDIT =================
+            isEditingPage && editingIstilah != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    EditIstilahScreen(
+                        initialNama = editingIstilah!!.namaIstilah,
+                        initialKategori = editingIstilah!!.kategori,
+                        initialDeskripsi = editingIstilah!!.deskripsi,
+                        onSave = { nama, kategori, deskripsi ->
+                            istilahViewModel.updateIstilah(
+                                editingIstilah!!.idIstilah,
+                                nama,
+                                kategori,
+                                deskripsi
+                            )
+                            isEditingPage = false
+                            editingIstilah = null
+                        },
+                        onCancel = {
+                            isEditingPage = false
+                            editingIstilah = null
+                        }
+                    )
+                }
+            }
+
+            // ================= HALAMAN LIST =================
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(16.dp)
+                ) {
+                    TextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(text = "Cari istilah gym") },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val errorMessage = (operationState as? UiState.Error)?.message
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (filteredIstilah.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Belum ada istilah. Tambahkan dengan tombol +",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredIstilah) { item ->
+                                IstilahItem(
+                                    item = item,
+                                    onClick = {
+                                        selectedIstilah = item
+                                        showDetailDialog = true
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -182,48 +213,15 @@ fun HomeScreen(
         }
     }
 
-    // ================== EDIT POPUP ==================
-    if (showFormDialog) {
-        IstilahFormScreen(
-            title = if (editingIstilah == null) "Tambah Istilah" else "Edit Istilah",
-            initialNama = editingIstilah?.namaIstilah ?: "",
-            initialKategori = editingIstilah?.kategori ?: "",
-            initialDeskripsi = editingIstilah?.deskripsi ?: "",
-            onSave = { nama, kategori, deskripsi ->
-                if (editingIstilah == null) {
-                    // fallback, jarang terpakai
-                    istilahViewModel.addIstilah(
-                        nama,
-                        kategori,
-                        deskripsi
-                    )
-                } else {
-                    // DI SINI JUGA: pakai nama, bukan namaIstilah
-                    istilahViewModel.updateIstilah(
-                        editingIstilah!!.idIstilah,
-                        nama,
-                        kategori,
-                        deskripsi
-                    )
-                }
-                showFormDialog = false
-                editingIstilah = null
-            },
-            onDismiss = {
-                showFormDialog = false
-                editingIstilah = null
-            }
-        )
-    }
-
-    // ================== DETAIL POPUP ==================
+    // =============== DETAIL POPUP (READ + tombol Edit/Hapus) ===============
     if (showDetailDialog && selectedIstilah != null) {
         DetailIstilahScreen(
             istilah = selectedIstilah!!,
             onEdit = {
+                // BUKA PAGE EDIT
                 editingIstilah = selectedIstilah
                 showDetailDialog = false
-                showFormDialog = true
+                isEditingPage = true
             },
             onDelete = {
                 istilahViewModel.deleteIstilah(selectedIstilah!!.idIstilah)
