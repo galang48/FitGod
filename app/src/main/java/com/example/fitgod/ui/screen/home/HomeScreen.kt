@@ -1,18 +1,29 @@
 package com.example.fitgod.ui.screen.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.fitgod.data.remote.model.IstilahDto
 import com.example.fitgod.ui.screen.detail.DetailIstilahScreen
@@ -35,66 +46,174 @@ fun HomeScreen(
     // state untuk page tambah & edit
     var isAddingPage by remember { mutableStateOf(false) }
     var isEditingPage by remember { mutableStateOf(false) }
-    var editingIstilah by remember { mutableStateOf<IstilahDto?>(null) }
+    var editingIstilah by remember { mutableStateOf<IstilahDto?>(null) } // Restored
+    var showEditDialog by remember { mutableStateOf(false) }
 
     // state untuk detail popup
-    var showDetailDialog by remember { mutableStateOf(false) }
-    var selectedIstilah by remember { mutableStateOf<IstilahDto?>(null) }
+    var showDetailDialog by remember { mutableStateOf(false) } // Restored
+    var selectedIstilah by remember { mutableStateOf<IstilahDto?>(null) } // Restored
 
     var searchText by rememberSaveable { mutableStateOf("") }
+    var selectedTab by remember { mutableStateOf(0) }
+    // Dynamic Tabs based on Categories
+    val categories = remember(istilahList) {
+        istilahList.map { it.kategori }.distinct().sorted()
+    }
+    val tabs = listOf("All") + categories
 
     // load data awal
     LaunchedEffect(Unit) {
         istilahViewModel.loadIstilah()
     }
 
-    val filteredIstilah = remember(istilahList, searchText) {
-        if (searchText.isBlank()) {
-            istilahList
-        } else {
+    val filteredIstilah = remember(istilahList, searchText, selectedTab, tabs) {
+        var result = istilahList
+        
+        // 1. Filter by Search
+        if (searchText.isNotBlank()) {
             val q = searchText.lowercase()
-            istilahList.filter { istilah ->
+           result = result.filter { istilah ->
                 istilah.namaIstilah.lowercase().contains(q) ||
                         istilah.kategori.lowercase().contains(q) ||
                         istilah.deskripsi.lowercase().contains(q)
             }
         }
+        
+        // 2. Filter by Tab
+        if (selectedTab > 0 && selectedTab < tabs.size) {
+            val selectedCategory = tabs[selectedTab]
+            result = result.filter { it.kategori.equals(selectedCategory, ignoreCase = true) }
+        } else {
+             // Tab 0 is "All", ensure no accidental out of bounds if tabs change
+             // No filtering needed
+        }
+        
+        result
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background, // White
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    val titleText = when {
-                        isAddingPage -> "Tambah Istilah"
-                        isEditingPage -> "Edit Istilah"
-                        else -> "FitGod - Kamus Istilah Gym"
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, start = 24.dp, end = 24.dp)
+            ) {
+                // Top Row: Avatar & Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Profile + Name Row
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Profile Avatar Placeholder
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            // First letter of username or default
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = authViewModel.getUsername()?.take(1)?.uppercase() ?: "U",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        Column {
+                             Text(
+                                text = "Hello,",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                            Text(
+                                text = authViewModel.getUsername() ?: "Guest",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
                     }
-                    Text(text = titleText)
-                },
-                actions = {
-                    TextButton(onClick = {
-                        authViewModel.logout()
-                        onLogout()
-                    }) {
-                        Text(text = "Logout")
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                         // Removed unused Bookmark icon if not functional, or kept as requested?
+                         // User said "function... delete it". 
+                         // Share icon is there. Let's keep Share and Logout.
+                        IconButton(onClick = { /* TODO: Implement Share */ }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.onBackground)
+                        }
+                        IconButton(onClick = { 
+                            authViewModel.logout()
+                            onLogout()
+                         }) {
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = MaterialTheme.colorScheme.onBackground)
+                        }
                     }
                 }
-            )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Title "FitGod"
+                Text(
+                    text = "FitGod", 
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Scrollable Tabs if many categories
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                     items(tabs.size) { index ->
+                        val title = tabs[index]
+                         Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable { selectedTab = index }
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedTab == index) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.tertiary
+                                )
+                            )
+                            if (selectedTab == index) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    modifier = Modifier
+                                        .width(32.dp)
+                                        .height(2.dp),
+                                    color = MaterialTheme.colorScheme.onBackground
+                                ) {}
+                            }
+                        }
+                     }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         },
         floatingActionButton = {
-            // FAB hanya muncul di halaman list
             if (!isAddingPage && !isEditingPage) {
                 FloatingActionButton(
                     onClick = {
                         editingIstilah = null
                         isAddingPage = true
-                    }
+                    },
+                    containerColor = MaterialTheme.colorScheme.onBackground, // Black FAB
+                    contentColor = MaterialTheme.colorScheme.background // White Icon
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Tambah istilah"
-                    )
+                    Icon(Icons.Default.Add, contentDescription = "Tambah")
                 }
             }
         }
@@ -103,163 +222,166 @@ fun HomeScreen(
         when {
             // ================= PAGE TAMBAH =================
             isAddingPage -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    AddIstilahScreen(
-                        onSave = { nama, kategori, deskripsi ->
-                            istilahViewModel.addIstilah(
-                                nama,
-                                kategori,
-                                deskripsi
-                            )
+                 Box(modifier = Modifier.padding(innerPadding)) {
+                     AddIstilahScreen(
+                        onSave = { n, k, d ->
+                            istilahViewModel.addIstilah(n, k, d)
                             isAddingPage = false
                         },
-                        onCancel = {
-                            isAddingPage = false
-                        }
-                    )
-                }
+                        onCancel = { isAddingPage = false }
+                     )
+                 }
             }
 
             // ================= PAGE EDIT =================
             isEditingPage && editingIstilah != null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
+                Box(modifier = Modifier.padding(innerPadding)) {
                     EditIstilahScreen(
                         initialNama = editingIstilah!!.namaIstilah,
                         initialKategori = editingIstilah!!.kategori,
                         initialDeskripsi = editingIstilah!!.deskripsi,
-                        onSave = { nama, kategori, deskripsi ->
-                            istilahViewModel.updateIstilah(
-                                editingIstilah!!.idIstilah,
-                                nama,
-                                kategori,
-                                deskripsi
-                            )
+                        onSave = { n, k, d ->
+                            istilahViewModel.updateIstilah(editingIstilah!!.idIstilah, n, k, d)
                             isEditingPage = false
                             editingIstilah = null
                         },
-                        onCancel = {
-                            isEditingPage = false
-                            editingIstilah = null
-                        }
+                        onCancel = { isEditingPage = false; editingIstilah = null }
                     )
                 }
             }
 
-            // ================= HALAMAN LIST =================
+            // ================= HALAMAN LIST ("New Workouts") =================
             else -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .padding(16.dp)
+                        .padding(horizontal = 24.dp)
                 ) {
-                    TextField(
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Search Bar (Restored)
+                    OutlinedTextField(
                         value = searchText,
                         onValueChange = { searchText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(text = "Cari istilah gym") },
-                        singleLine = true
+                        label = { Text("Search Terms...") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, // Grey background
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent
+                        )
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val errorMessage = (operationState as? UiState.Error)?.message
-                    if (errorMessage != null) {
-                        Text(
-                            text = errorMessage,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (filteredIstilah.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Belum ada istilah. Tambahkan dengan tombol +",
-                                style = MaterialTheme.typography.bodyMedium
+                    Text(
+                        text = "Recent Terms", // Changed from New Workouts
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    LazyColumn(
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                         items(filteredIstilah) { item ->
+                            IstilahItem(
+                                item = item,
+                                onClick = {
+                                    selectedIstilah = item
+                                    showDetailDialog = true
+                                }
                             )
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(filteredIstilah) { item ->
-                                IstilahItem(
-                                    item = item,
-                                    onClick = {
-                                        selectedIstilah = item
-                                        showDetailDialog = true
-                                    }
-                                )
-                            }
                         }
                     }
                 }
+                
+                // Dialogs
+                if (showDetailDialog && selectedIstilah != null) {
+                        DetailIstilahScreen(
+                            istilah = selectedIstilah!!,
+                            onEdit = {
+                                showDetailDialog = false
+                                editingIstilah = selectedIstilah // Set editing item
+                                isEditingPage = true // Go to full page edit
+                            },
+                            onDelete = {
+                                istilahViewModel.deleteIstilah(selectedIstilah!!.idIstilah)
+                                showDetailDialog = false
+                                selectedIstilah = null
+                            },
+                            onClose = {
+                                showDetailDialog = false
+                                selectedIstilah = null
+                            }
+                        )
+                }
+                // Removed Dialog(showEditDialog) block as we now use isEditingPage
             }
         }
-    }
-
-    // =============== DETAIL POPUP (READ + tombol Edit/Hapus) ===============
-    if (showDetailDialog && selectedIstilah != null) {
-        DetailIstilahScreen(
-            istilah = selectedIstilah!!,
-            onEdit = {
-                // BUKA PAGE EDIT
-                editingIstilah = selectedIstilah
-                showDetailDialog = false
-                isEditingPage = true
-            },
-            onDelete = {
-                istilahViewModel.deleteIstilah(selectedIstilah!!.idIstilah)
-                showDetailDialog = false
-                selectedIstilah = null
-            },
-            onClose = {
-                showDetailDialog = false
-                selectedIstilah = null
-            }
-        )
     }
 }
 
 @Composable
-private fun IstilahItem(
-    item: IstilahDto,
-    onClick: () -> Unit
-) {
+private fun IstilahItem(item: IstilahDto, onClick: () -> Unit) {
+    // Simple Card Look (No Image)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant // Greyish bg
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(all = 12.dp)) {
-            Text(
-                text = item.namaIstilah,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = item.deskripsi,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.namaIstilah,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.kategori.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                 Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.deskripsi,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            IconButton(
+                onClick = onClick,
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(MaterialTheme.colorScheme.background, androidx.compose.foundation.shape.CircleShape)
+            ) {
+                 Icon(
+                     imageVector = Icons.Default.Add, 
+                     contentDescription = "Detail",
+                     tint = MaterialTheme.colorScheme.onBackground,
+                     modifier = Modifier.size(16.dp)
+                 )
+            }
         }
     }
 }
