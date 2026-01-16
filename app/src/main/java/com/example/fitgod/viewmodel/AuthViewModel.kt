@@ -103,6 +103,8 @@ class AuthViewModel(
 
     fun isLoggedIn(): Boolean = sessionManager.isLoggedIn()
 
+    fun getUsername(): String? = sessionManager.getUsername()
+
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
